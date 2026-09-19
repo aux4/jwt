@@ -1,9 +1,9 @@
 name: Publish Package
 
-# main -> prod hub (static AUX4_ACCESS_TOKEN org secret)
-# dev  -> dev hub  (a fresh token minted from the AUX4_DEV_PUBLISHER_* client
+# main -> prod hub (fresh token minted from AUX4_PUBLISHER_* client credentials)
+# dev  -> dev hub  (fresh token minted from AUX4_DEV_PUBLISHER_* client
 #         credentials, since the dev hub validates against dev SSO). Both paths
-#         call aux4/action@v1 command:publish; only the token + registry differ.
+#         call aux4/action@v1 command:publish; only the mint endpoint + registry differ.
 on:
   push:
     branches:
@@ -124,26 +124,27 @@ jobs:
       - name: Build
         run: aux4 build
 
-      # The dev hub is validated by dev SSO, so a prod token is rejected there.
-      # Mint a short-lived dev publish token (scope: packages:write) from the dev
-      # publisher client credentials. Only runs on the dev branch.
-      - name: Mint dev hub publish token
-        id: devtoken
-        if: github.ref_name == 'dev'
+      # A static AUX4_ACCESS_TOKEN org secret is never refreshed by pkger (it's
+      # returned verbatim and goes stale), so mint a fresh short-lived token via
+      # client_credentials on every run instead. dev hub validates against dev
+      # SSO, so dev and main mint from different client creds / SSO endpoints.
+      - name: Mint hub publish token
+        id: mint
         env:
-          CLIENT_ID: ${{ secrets.AUX4_DEV_PUBLISHER_CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.AUX4_DEV_PUBLISHER_CLIENT_SECRET }}
+          CLIENT_ID: ${{ github.ref_name == 'dev' && secrets.AUX4_DEV_PUBLISHER_CLIENT_ID || secrets.AUX4_PUBLISHER_CLIENT_ID }}
+          CLIENT_SECRET: ${{ github.ref_name == 'dev' && secrets.AUX4_DEV_PUBLISHER_CLIENT_SECRET || secrets.AUX4_PUBLISHER_CLIENT_SECRET }}
+          SSO_URL: ${{ github.ref_name == 'dev' && 'https://dev.sso.aux4.io/token' || 'https://sso.aux4.io/token' }}
         run: |
           set -euo pipefail
           if [ -z "$CLIENT_ID" ] || [ -z "$CLIENT_SECRET" ]; then
-            echo "::error::AUX4_DEV_PUBLISHER_CLIENT_ID/SECRET not set"
+            echo "::error::Publisher client id/secret not set for ${{ github.ref_name }}"
             exit 1
           fi
           TOKEN=$(curl -sf -u "$CLIENT_ID:$CLIENT_SECRET" \
             -d grant_type=client_credentials \
-            "https://dev.sso.aux4.io/token" | jq -r '.access_token // empty')
+            "$SSO_URL" | jq -r '.access_token // empty')
           if [ -z "$TOKEN" ]; then
-            echo "::error::Failed to mint a dev publish token from https://dev.sso.aux4.io/token. Verify AUX4_DEV_PUBLISHER_CLIENT_ID/SECRET."
+            echo "::error::client_credentials mint returned no access_token from $SSO_URL"
             exit 1
           fi
           echo "::add-mask::$TOKEN"
@@ -154,8 +155,7 @@ jobs:
         with:
           command: publish
           level: ${{ inputs.level || 'patch' }}
-          # dev -> minted dev token; main -> prod org token
-          aux4_token: ${{ github.ref_name == 'dev' && steps.devtoken.outputs.token || secrets.AUX4_ACCESS_TOKEN }}
+          aux4_token: ${{ steps.mint.outputs.token }}
           # dev -> dev hub registry; main -> default (prod) hub
           registry: ${{ github.ref_name == 'dev' && 'https://dev.api.hub.aux4.io/v1/packages' || '' }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
