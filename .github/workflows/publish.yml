@@ -1,9 +1,14 @@
 name: Publish Package
 
+# main -> prod hub (static AUX4_ACCESS_TOKEN org secret)
+# dev  -> dev hub  (a fresh token minted from the AUX4_DEV_PUBLISHER_* client
+#         credentials, since the dev hub validates against dev SSO). Both paths
+#         call aux4/action@v1 command:publish; only the token + registry differ.
 on:
   push:
     branches:
       - main
+      - dev
     paths:
       - '**'
       - '!.github/**'
@@ -24,7 +29,7 @@ on:
           - major
 
 concurrency:
-  group: publish-package
+  group: publish-package-${{ github.ref_name }}
   cancel-in-progress: false
 
 permissions:
@@ -119,10 +124,38 @@ jobs:
       - name: Build
         run: aux4 build
 
+      # The dev hub is validated by dev SSO, so a prod token is rejected there.
+      # Mint a short-lived dev publish token (scope: packages:write) from the dev
+      # publisher client credentials. Only runs on the dev branch.
+      - name: Mint dev hub publish token
+        id: devtoken
+        if: github.ref_name == 'dev'
+        env:
+          CLIENT_ID: ${{ secrets.AUX4_DEV_PUBLISHER_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.AUX4_DEV_PUBLISHER_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CLIENT_ID" ] || [ -z "$CLIENT_SECRET" ]; then
+            echo "::error::AUX4_DEV_PUBLISHER_CLIENT_ID/SECRET not set"
+            exit 1
+          fi
+          TOKEN=$(curl -sf -u "$CLIENT_ID:$CLIENT_SECRET" \
+            -d grant_type=client_credentials \
+            "https://dev.sso.aux4.io/token" | jq -r '.access_token // empty')
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Failed to mint a dev publish token from https://dev.sso.aux4.io/token. Verify AUX4_DEV_PUBLISHER_CLIENT_ID/SECRET."
+            exit 1
+          fi
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
       - name: Publish
         uses: aux4/action@v1
         with:
           command: publish
           level: ${{ inputs.level || 'patch' }}
-          aux4_token: ${{ secrets.AUX4_ACCESS_TOKEN }}
+          # dev -> minted dev token; main -> prod org token
+          aux4_token: ${{ github.ref_name == 'dev' && steps.devtoken.outputs.token || secrets.AUX4_ACCESS_TOKEN }}
+          # dev -> dev hub registry; main -> default (prod) hub
+          registry: ${{ github.ref_name == 'dev' && 'https://dev.api.hub.aux4.io/v1/packages' || '' }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
