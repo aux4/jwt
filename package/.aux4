@@ -1,0 +1,239 @@
+{
+  "scope": "aux4",
+  "name": "jwt",
+  "version": "0.1.0",
+  "description": "Verify JWTs locally against a JWKS file, with no network call in the verification path",
+  "license": "Apache-2.0",
+  "tags": [
+    "jwt",
+    "jwks",
+    "auth",
+    "authentication",
+    "authorization",
+    "oidc",
+    "oauth2",
+    "security",
+    "token",
+    "offline"
+  ],
+  "profiles": [
+    {
+      "name": "main",
+      "commands": [
+        {
+          "name": "jwt",
+          "execute": [
+            "profile:jwt"
+          ],
+          "help": {
+            "text": "verify and inspect JSON Web Tokens"
+          }
+        }
+      ]
+    },
+    {
+      "name": "jwt",
+      "commands": [
+        {
+          "name": "verify",
+          "execute": [
+            "${packageDir}/aux4-jwt verify values(token, tokenFile, jwksFile, issuer, audience, subject, scope, algorithms, clockSkew, maxAge, claim, quiet, strict, warnings)"
+          ],
+          "help": {
+            "text": "verify a token against a local JWKS and print its claims",
+            "variables": [
+              {
+                "name": "token",
+                "text": "The token to verify. Prefer AUX4_JWT_TOKEN or --tokenFile: an argument is visible to every process on the machine",
+                "arg": true,
+                "env": "AUX4_JWT_TOKEN",
+                "default": ""
+              },
+              {
+                "name": "tokenFile",
+                "text": "Read the token from this file instead of passing it as an argument",
+                "env": "AUX4_JWT_TOKEN_FILE",
+                "default": ""
+              },
+              {
+                "name": "jwksFile",
+                "text": "Path to the local JWKS file holding the trusted public keys (required)",
+                "env": "AUX4_JWT_JWKS_FILE",
+                "default": ""
+              },
+              {
+                "name": "issuer",
+                "text": "Require this exact iss claim. When unset the issuer is NOT checked and a warning is printed",
+                "env": "AUX4_JWT_ISSUER",
+                "default": ""
+              },
+              {
+                "name": "audience",
+                "text": "Require this value in the aud claim. When unset the audience is NOT checked and a warning is printed",
+                "env": "AUX4_JWT_AUDIENCE",
+                "default": ""
+              },
+              {
+                "name": "subject",
+                "text": "Require this exact sub claim",
+                "env": "AUX4_JWT_SUBJECT",
+                "default": ""
+              },
+              {
+                "name": "scope",
+                "text": "Require this value among the space-delimited scope claim",
+                "env": "AUX4_JWT_SCOPE",
+                "default": ""
+              },
+              {
+                "name": "algorithms",
+                "text": "Comma-separated allow-list of signature algorithms, for example RS256. Defaults to every supported asymmetric algorithm. HS256 and none can never be enabled",
+                "env": "AUX4_JWT_ALGORITHMS",
+                "default": ""
+              },
+              {
+                "name": "clockSkew",
+                "text": "Leeway in seconds applied to exp, nbf and iat",
+                "env": "AUX4_JWT_CLOCK_SKEW",
+                "default": "30"
+              },
+              {
+                "name": "maxAge",
+                "text": "Reject tokens issued more than this many seconds ago. 0 disables the check",
+                "env": "AUX4_JWT_MAX_AGE",
+                "default": "0"
+              },
+              {
+                "name": "claim",
+                "text": "Print only this claim instead of the whole claim set",
+                "default": ""
+              },
+              {
+                "name": "quiet",
+                "text": "Print nothing on success and rely on the exit code alone",
+                "default": "false"
+              },
+              {
+                "name": "strict",
+                "text": "Refuse to run unless both issuer and audience are configured",
+                "env": "AUX4_JWT_STRICT",
+                "default": "false"
+              },
+              {
+                "name": "warnings",
+                "text": "Print a warning for every claim check that is not configured",
+                "env": "AUX4_JWT_WARNINGS",
+                "default": "true"
+              }
+            ]
+          }
+        },
+        {
+          "name": "decode-unverified",
+          "execute": [
+            "${packageDir}/aux4-jwt decode-unverified values(token, tokenFile, part, claim)"
+          ],
+          "help": {
+            "text": "print what a token claims WITHOUT verifying it (debugging only, never for authorization)",
+            "variables": [
+              {
+                "name": "token",
+                "text": "The token to decode",
+                "arg": true,
+                "env": "AUX4_JWT_TOKEN",
+                "default": ""
+              },
+              {
+                "name": "tokenFile",
+                "text": "Read the token from this file instead of passing it as an argument",
+                "env": "AUX4_JWT_TOKEN_FILE",
+                "default": ""
+              },
+              {
+                "name": "part",
+                "text": "Which segment to print",
+                "options": [
+                  "payload",
+                  "header",
+                  "all"
+                ],
+                "default": "payload"
+              },
+              {
+                "name": "claim",
+                "text": "Print only this payload claim",
+                "default": ""
+              }
+            ]
+          }
+        },
+        {
+          "name": "jwks",
+          "execute": [
+            "profile:jwt:jwks"
+          ],
+          "help": {
+            "text": "work with local JWKS files"
+          }
+        }
+      ]
+    },
+    {
+      "name": "jwt:jwks",
+      "commands": [
+        {
+          "name": "list",
+          "execute": [
+            "${packageDir}/aux4-jwt jwks-list values(jwksFile)"
+          ],
+          "help": {
+            "text": "list the keys in a local JWKS file",
+            "variables": [
+              {
+                "name": "jwksFile",
+                "text": "Path to the JWKS file",
+                "arg": true,
+                "env": "AUX4_JWT_JWKS_FILE",
+                "default": ""
+              }
+            ]
+          }
+        },
+        {
+          "name": "fetch",
+          "execute": [
+            "${packageDir}/aux4-jwt jwks-fetch values(url, issuer, output, timeout)"
+          ],
+          "help": {
+            "text": "download a JWKS over HTTPS to a local file (setup time only, never used by verify)",
+            "variables": [
+              {
+                "name": "url",
+                "text": "The JWKS endpoint to download from. Must be https",
+                "env": "AUX4_JWT_JWKS_URL",
+                "default": ""
+              },
+              {
+                "name": "issuer",
+                "text": "An OpenID Connect issuer to discover the JWKS endpoint from, instead of --url",
+                "env": "AUX4_JWT_ISSUER",
+                "default": ""
+              },
+              {
+                "name": "output",
+                "text": "Where to write the JWKS file",
+                "env": "AUX4_JWT_JWKS_FILE",
+                "default": ""
+              },
+              {
+                "name": "timeout",
+                "text": "Request timeout in seconds",
+                "default": "10"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

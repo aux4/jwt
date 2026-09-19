@@ -1,0 +1,5 @@
+package/dist/
+package/aux4-jwt
+aux4-jwt
+*.zip
+.DS_Store
