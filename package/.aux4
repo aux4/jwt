@@ -1,7 +1,7 @@
 {
   "scope": "aux4",
   "name": "jwt",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Verify JWTs locally against a JWKS file, with no network call in the verification path",
   "license": "Apache-2.0",
   "tags": [
